@@ -1,0 +1,5 @@
+.pio
+.vscode/
+include/
+src/
+platformio.ini

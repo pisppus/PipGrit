@@ -1,0 +1,58 @@
+#pragma once
+
+#ifndef PIPGRIT_DISPLAY_W
+#define PIPGRIT_DISPLAY_W 480
+#endif
+#ifndef PIPGRIT_DISPLAY_H
+#define PIPGRIT_DISPLAY_H 320
+#endif
+
+#ifndef PIPGRIT_GRID_W
+#define PIPGRIT_GRID_W PIPGRIT_DISPLAY_W
+#endif
+#ifndef PIPGRIT_GRID_H
+#define PIPGRIT_GRID_H PIPGRIT_DISPLAY_H
+#endif
+
+#ifndef PIPGRIT_TFT_MOSI
+#define PIPGRIT_TFT_MOSI 6
+#endif
+#ifndef PIPGRIT_TFT_SCLK
+#define PIPGRIT_TFT_SCLK 5
+#endif
+#ifndef PIPGRIT_TFT_CS
+#define PIPGRIT_TFT_CS 7
+#endif
+#ifndef PIPGRIT_TFT_DC
+#define PIPGRIT_TFT_DC 8
+#endif
+#ifndef PIPGRIT_TFT_RST
+#define PIPGRIT_TFT_RST -1
+#endif
+#ifndef PIPGRIT_TFT_HZ
+#define PIPGRIT_TFT_HZ 80000000
+#endif
+#ifndef PIPGRIT_TFT_ROTATION
+#define PIPGRIT_TFT_ROTATION 1
+#endif
+
+#ifndef PIPGRIT_NUM_TILES
+#define PIPGRIT_NUM_TILES 8
+#endif
+
+#ifndef PIPGRIT_BRUSH_RADIUS
+#define PIPGRIT_BRUSH_RADIUS 6
+#endif
+
+#ifndef PIPGRIT_SIM_HZ
+#define PIPGRIT_SIM_HZ 60
+#endif
+
+#ifndef PIPGRIT_HUD_ENABLED
+#define PIPGRIT_HUD_ENABLED 1
+#endif
+
+#define PIPGRIT_VERSION_MAJOR 0
+#define PIPGRIT_VERSION_MINOR 1
+#define PIPGRIT_VERSION_PATCH 0
+#define PIPGRIT_VERSION "0.1.0"

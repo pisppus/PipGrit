@@ -1,0 +1,44 @@
+{
+  "name": "PipGrit",
+  "version": "0.1.0",
+  "description": "Falling-sand cellular simulator engine for ESP32-S3 (no PSRAM), built on PipCore.",
+  "keywords": [
+    "esp32",
+    "esp32-s3",
+    "falling-sand",
+    "powder",
+    "simulation",
+    "st7789",
+    "dma",
+    "touch"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pisppus/PipGrit.git"
+  },
+  "authors": [
+    {
+      "name": "Pisppus",
+      "email": "pisppus@gmail.com",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "frameworks": [
+    "arduino"
+  ],
+  "platforms": [
+    "espressif32"
+  ],
+  "headers": "PipGrit.hpp",
+  "build": {
+    "includeDir": ".",
+    "srcDir": ".",
+    "srcFilter": [
+      "+<**/*.cpp>",
+      "-<PipCore/Host/Desktop/**>",
+      "-<PipCore/Platforms/Desktop/**>",
+      "-<PipCore/Displays/Simulator/**>"
+    ]
+  }
+}
