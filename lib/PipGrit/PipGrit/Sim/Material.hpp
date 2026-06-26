@@ -22,6 +22,7 @@ namespace pipgrit
         Steam = 11,
         Lava = 12,
         Gunpowder = 13,
+        Smoke = 14,
         CellCount
     };
 
@@ -48,6 +49,7 @@ namespace pipgrit
         Matter::Empty,  // Steam
         Matter::Liquid, // Lava
         Matter::Powder, // Gunpowder
+        Matter::Empty,  // Smoke
     };
 
     [[nodiscard]] inline constexpr Matter matterOf(Cell c) noexcept
@@ -74,30 +76,50 @@ namespace pipgrit
         constexpr uint16_t kSteam = pipcore::Sprite::color565(0xE0, 0xE0, 0xE5);
         constexpr uint16_t kLava = pipcore::Sprite::color565(0xFF, 0x55, 0x00);
         constexpr uint16_t kGunpowder = pipcore::Sprite::color565(0x55, 0x55, 0x5B);
+        constexpr uint16_t kSmoke = pipcore::Sprite::color565(0x55, 0x55, 0x5D); // Текстура дыма
     }
 
-    constexpr uint16_t makeLutColor(size_t i) noexcept {
-        if (i == Sand) return pipcore::Sprite::swap16(palette::kSand);
-        if (i == Water) return pipcore::Sprite::swap16(palette::kWater);
-        if (i == Stone) return pipcore::Sprite::swap16(palette::kStone);
-        if (i == Wood) return pipcore::Sprite::swap16(palette::kWood);
-        if (i == Wall) return pipcore::Sprite::swap16(palette::kWall);
-        if (i == Fire) return pipcore::Sprite::swap16(palette::kFire);
-        if (i == Ash) return pipcore::Sprite::swap16(palette::kAsh);
-        if (i == Acid) return pipcore::Sprite::swap16(palette::kAcid);
-        if (i == Oil) return pipcore::Sprite::swap16(palette::kOil);
-        if (i == Ice) return pipcore::Sprite::swap16(palette::kIce);
-        if (i == Steam) return pipcore::Sprite::swap16(palette::kSteam);
-        if (i == Lava) return pipcore::Sprite::swap16(palette::kLava);
-        if (i == Gunpowder) return pipcore::Sprite::swap16(palette::kGunpowder);
+    constexpr uint16_t makeLutColor(size_t i) noexcept
+    {
+        if (i == Sand)
+            return pipcore::Sprite::swap16(palette::kSand);
+        if (i == Water)
+            return pipcore::Sprite::swap16(palette::kWater);
+        if (i == Stone)
+            return pipcore::Sprite::swap16(palette::kStone);
+        if (i == Wood)
+            return pipcore::Sprite::swap16(palette::kWood);
+        if (i == Wall)
+            return pipcore::Sprite::swap16(palette::kWall);
+        if (i == Fire)
+            return pipcore::Sprite::swap16(palette::kFire);
+        if (i == Ash)
+            return pipcore::Sprite::swap16(palette::kAsh);
+        if (i == Acid)
+            return pipcore::Sprite::swap16(palette::kAcid);
+        if (i == Oil)
+            return pipcore::Sprite::swap16(palette::kOil);
+        if (i == Ice)
+            return pipcore::Sprite::swap16(palette::kIce);
+        if (i == Steam)
+            return pipcore::Sprite::swap16(palette::kSteam);
+        if (i == Lava)
+            return pipcore::Sprite::swap16(palette::kLava);
+        if (i == Gunpowder)
+            return pipcore::Sprite::swap16(palette::kGunpowder);
+        if (i == Smoke)
+            return pipcore::Sprite::swap16(palette::kSmoke);
         return pipcore::Sprite::swap16(palette::kEmpty);
     }
 
     template <size_t N>
-    struct ColorLut {
+    struct ColorLut
+    {
         uint16_t data[N];
-        constexpr ColorLut() : data{} {
-            for (size_t i = 0; i < N; ++i) {
+        constexpr ColorLut() : data{}
+        {
+            for (size_t i = 0; i < N; ++i)
+            {
                 data[i] = makeLutColor(i);
             }
         }
@@ -115,21 +137,38 @@ namespace pipgrit
     {
         switch (c)
         {
-        case Empty: return "Empty";
-        case Sand: return "Sand";
-        case Water: return "Water";
-        case Stone: return "Stone";
-        case Wood: return "Wood";
-        case Wall: return "Wall";
-        case Fire: return "Fire";
-        case Ash: return "Ash";
-        case Acid: return "Acid";
-        case Oil: return "Oil";
-        case Ice: return "Ice";
-        case Steam: return "Steam";
-        case Lava: return "Lava";
-        case Gunpowder: return "Gunpowder";
-        default: return "?";
+        case Empty:
+            return "Empty";
+        case Sand:
+            return "Sand";
+        case Water:
+            return "Water";
+        case Stone:
+            return "Stone";
+        case Wood:
+            return "Wood";
+        case Wall:
+            return "Wall";
+        case Fire:
+            return "Fire";
+        case Ash:
+            return "Ash";
+        case Acid:
+            return "Acid";
+        case Oil:
+            return "Oil";
+        case Ice:
+            return "Ice";
+        case Steam:
+            return "Steam";
+        case Lava:
+            return "Lava";
+        case Gunpowder:
+            return "Gunpowder";
+        case Smoke:
+            return "Smoke";
+        default:
+            return "?";
         }
     }
 }

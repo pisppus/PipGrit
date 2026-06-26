@@ -67,7 +67,8 @@ namespace pipgrit
         TaskHandle_t _simTaskHandle = nullptr;
         TaskHandle_t _renderTaskHandle = nullptr;
 
-        struct LastTouch {
+        struct LastTouch
+        {
             int16_t x = -1;
             int16_t y = -1;
             bool active = false;
@@ -78,6 +79,9 @@ namespace pipgrit
         int16_t _scrollStartOffset = 0;
         bool _isDragging[2] = {false, false};
 
-        int16_t _selectorY = 280; 
+        int16_t _selectorY = 280;
+
+        uint32_t _cachedCellCount = 0;
+        bool _selectorBarDirty = true;
     };
 }

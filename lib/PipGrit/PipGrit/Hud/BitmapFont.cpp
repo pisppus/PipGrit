@@ -114,7 +114,7 @@ namespace pipgrit
         idx -= FirstChar;
 
         const uint8_t *glyph = kGlyphs[idx];
-        
+
         for (int16_t c = 0; c < GlyphW; ++c)
         {
             const int16_t px = x + c;

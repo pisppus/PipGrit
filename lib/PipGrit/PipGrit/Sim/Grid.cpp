@@ -1,5 +1,4 @@
 #include <PipGrit/Sim/Grid.hpp>
-
 #include <algorithm>
 #include <cstring>
 
@@ -30,11 +29,27 @@ namespace pipgrit
             return false;
         }
 
+        _chunkW = width >> 3;
+        _chunkH = height >> 3;
+        const size_t chunkCount = static_cast<size_t>(_chunkW) * _chunkH;
+        _chunks = static_cast<uint8_t *>(platform->alloc(chunkCount, pipcore::AllocCaps::PreferInternal));
+        if (!_chunks)
+        {
+            platform->free(_cells);
+            platform->free(_temps);
+            _cells = nullptr;
+            _temps = nullptr;
+            return false;
+        }
+
         _platform = platform;
         _w = width;
         _h = height;
         std::memset(_cells, 0, count);
         std::memset(_temps, 20, tempCount);
+        std::memset(_chunks, 3, chunkCount);
+
+        forceFullDirty();
         return true;
     }
 
@@ -44,10 +59,15 @@ namespace pipgrit
             _platform->free(_cells);
         if (_temps && _platform)
             _platform->free(_temps);
+        if (_chunks && _platform)
+            _platform->free(_chunks);
         _cells = nullptr;
         _temps = nullptr;
+        _chunks = nullptr;
         _platform = nullptr;
-        _w = _h = 0;
+        _w = _h = _chunkW = _chunkH = 0;
+        _tileDirtyMaskNext = 0;
+        _tileDirtyMaskCurrent = 0;
     }
 
     void Grid::clear() noexcept
@@ -56,12 +76,29 @@ namespace pipgrit
             std::memset(_cells, 0, static_cast<size_t>(_w) * static_cast<size_t>(_h));
         if (_temps)
             std::memset(_temps, 20, static_cast<size_t>(_w >> 2) * static_cast<size_t>(_h >> 2));
+        if (_chunks)
+            std::memset(_chunks, 0, static_cast<size_t>(_chunkW) * _chunkH);
+
+        _activeMinCx = 0;
+        _activeMaxCx = -1;
+        _activeMinCy = 0;
+        _activeMaxCy = -1;
+        _nextMinCx = 0x7FFF;
+        _nextMaxCx = -0x7FFF;
+        _nextMinCy = 0x7FFF;
+        _nextMaxCy = -0x7FFF;
+        _tileDirtyMaskNext = 0;
+        _tileDirtyMaskCurrent = 0;
     }
 
     void Grid::fill(Cell c) noexcept
     {
         if (_cells)
             std::memset(_cells, static_cast<uint8_t>(c), static_cast<size_t>(_w) * static_cast<size_t>(_h));
+        if (_chunks)
+            std::memset(_chunks, 3, static_cast<size_t>(_chunkW) * _chunkH);
+
+        forceFullDirty();
     }
 
     void Grid::fillRect(int16_t x, int16_t y, int16_t w, int16_t h, Cell c) noexcept
@@ -75,6 +112,17 @@ namespace pipgrit
         const uint8_t v = static_cast<uint8_t>(c);
         for (int16_t yy = y1; yy < y2; ++yy)
             std::memset(_cells + static_cast<size_t>(yy) * _w + x1, v, static_cast<size_t>(x2 - x1));
+
+        if (_chunks)
+        {
+            const int16_t cx1 = x1 >> 3;
+            const int16_t cy1 = y1 >> 3;
+            const int16_t cx2 = std::min<int16_t>((x2 + 7) >> 3, _chunkW);
+            const int16_t cy2 = std::min<int16_t>((y2 + 7) >> 3, _chunkH);
+            for (int16_t cy = cy1; cy < cy2; ++cy)
+                for (int16_t cx = cx1; cx < cx2; ++cx)
+                    forceActivateChunk(cx, cy);
+        }
     }
 
     void Grid::brush(int16_t cx, int16_t cy, int16_t radius, Cell c, uint32_t seed) noexcept
@@ -131,26 +179,42 @@ namespace pipgrit
                         if (existing == Empty)
                         {
                             row[xx] = Fire;
-                            if (_temps) _temps[tempIdx] = 255;
+                            if (_temps)
+                                _temps[tempIdx] = 255;
                         }
                         else
                         {
-                            if (_temps) _temps[tempIdx] = 255;
+                            if (_temps)
+                                _temps[tempIdx] = 255;
                         }
                     }
                     else
                     {
                         row[xx] = v;
-                        
+
                         if (_temps)
                         {
-                            if (c == Ice) _temps[tempIdx] = 0;
-                            else if (c == Steam) _temps[tempIdx] = 110;
-                            else _temps[tempIdx] = 20;
+                            if (c == Ice)
+                                _temps[tempIdx] = 0;
+                            else if (c == Steam)
+                                _temps[tempIdx] = 110;
+                            else
+                                _temps[tempIdx] = 20;
                         }
                     }
                 }
             }
+        }
+
+        if (_chunks)
+        {
+            const int16_t cx1 = x1 >> 3;
+            const int16_t cy1 = y1 >> 3;
+            const int16_t cx2 = std::min<int16_t>((x2 + 7) >> 3, _chunkW);
+            const int16_t cy2 = std::min<int16_t>((y2 + 7) >> 3, _chunkH);
+            for (int16_t cy = cy1; cy < cy2; ++cy)
+                for (int16_t cx = cx1; cx < cx2; ++cx)
+                    forceActivateChunk(cx, cy);
         }
     }
 
@@ -167,7 +231,7 @@ namespace pipgrit
 
     void Grid::diffuseHeat() noexcept
     {
-        if (!_temps)
+        if (!_temps || !_chunks)
             return;
 
         const int16_t wt = _w >> 2;
@@ -189,13 +253,46 @@ namespace pipgrit
                 uint8_t t2 = (val >> 16) & 0xFF;
                 uint8_t t3 = (val >> 24) & 0xFF;
 
-                auto cool = [](uint8_t t) -> uint8_t {
-                    if (t > 20) return t - 1;
-                    if (t < 20) return t + 1;
+                auto cool = [](uint8_t t) -> uint8_t
+                {
+                    if (t > 20)
+                        return t - 1;
+                    if (t < 20)
+                        return t + 1;
                     return 20;
                 };
 
                 temps32[i] = cool(t0) | (cool(t1) << 8) | (cool(t2) << 16) | (cool(t3) << 24);
+
+                const int32_t baseIdx = i << 2;
+                for (int offset = 0; offset < 4; ++offset)
+                {
+                    uint8_t t = (offset == 0) ? t0 : ((offset == 1) ? t1 : ((offset == 2) ? t2 : t3));
+                    if (t != 20)
+                    {
+                        const int32_t idx = baseIdx + offset;
+                        const int16_t tx_temp = idx % wt;
+                        const int16_t ty_temp = idx / wt;
+                        const int16_t cx = tx_temp >> 1;
+                        const int16_t cy = ty_temp >> 1;
+                        if (cx < _chunkW && cy < _chunkH)
+                        {
+                            _chunks[static_cast<size_t>(cy) * _chunkW + cx] |= 2;
+                            const int16_t tx_tile = cx / 10;
+                            const int16_t ty_tile = cy / 5;
+                            _tileDirtyMaskNext |= (1ULL << (ty_tile * 6 + tx_tile));
+
+                            if (cx < _nextMinCx)
+                                _nextMinCx = cx;
+                            if (cx > _nextMaxCx)
+                                _nextMaxCx = cx;
+                            if (cy < _nextMinCy)
+                                _nextMinCy = cy;
+                            if (cy > _nextMaxCy)
+                                _nextMaxCy = cy;
+                        }
+                    }
+                }
             }
         }
         else
@@ -203,8 +300,34 @@ namespace pipgrit
             for (int32_t i = 0; i < total; ++i)
             {
                 uint8_t t = _temps[i];
-                if (t > 20) _temps[i] = t - 1;
-                else if (t < 20) _temps[i] = t + 1;
+                if (t != 20)
+                {
+                    if (t > 20)
+                        _temps[i] = t - 1;
+                    else
+                        _temps[i] = t + 1;
+
+                    const int16_t tx_temp = i % wt;
+                    const int16_t ty_temp = i / wt;
+                    const int16_t cx = tx_temp >> 1;
+                    const int16_t cy = ty_temp >> 1;
+                    if (cx < _chunkW && cy < _chunkH)
+                    {
+                        _chunks[static_cast<size_t>(cy) * _chunkW + cx] |= 2;
+                        const int16_t tx_tile = cx / 10;
+                        const int16_t ty_tile = cy / 5;
+                        _tileDirtyMaskNext |= (1ULL << (ty_tile * 6 + tx_tile));
+
+                        if (cx < _nextMinCx)
+                            _nextMinCx = cx;
+                        if (cx > _nextMaxCx)
+                            _nextMaxCx = cx;
+                        if (cy < _nextMinCy)
+                            _nextMinCy = cy;
+                        if (cy > _nextMaxCy)
+                            _nextMaxCy = cy;
+                    }
+                }
             }
         }
 
@@ -216,11 +339,7 @@ namespace pipgrit
 
             for (int16_t x = 1; x < wt - 1; ++x)
             {
-                uint32_t sum = static_cast<uint32_t>(row_me[x]) * 10
-                             + row_me[x - 1]
-                             + row_me[x + 1]
-                             + row_up[x]
-                             + row_down[x] * 3;
+                uint32_t sum = static_cast<uint32_t>(row_me[x]) * 10 + row_me[x - 1] + row_me[x + 1] + row_up[x] + row_down[x] * 3;
                 row_me[x] = static_cast<uint8_t>(sum >> 4);
             }
         }

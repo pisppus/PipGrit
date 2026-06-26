@@ -26,14 +26,21 @@ namespace pipgrit
             return false;
 
         _platform = platform;
-        const int16_t w = PIPGRIT_GRID_W;
-        const int16_t h = PIPGRIT_GRID_H;
+        const int16_t screenW = platform->display() ? platform->display()->width() : PIPGRIT_DISPLAY_W;
+        const int16_t screenH = platform->display() ? platform->display()->height() : PIPGRIT_DISPLAY_H;
 
-        if (!_grid.create(platform, w, h))
+        const int16_t bandRows = std::max<int16_t>(1, screenH / PIPGRIT_NUM_TILES);
+
+        _selectorY = screenH - bandRows;
+
+        const int16_t gridW = screenW;
+        const int16_t gridH = _selectorY;
+
+        if (!_grid.create(platform, gridW, gridH))
             return false;
         _sim.bind(&_grid);
 
-        if (!_renderer.create(platform, w, h, PIPGRIT_NUM_TILES))
+        if (!_renderer.create(platform, screenW, screenH, PIPGRIT_NUM_TILES))
         {
             destroy();
             return false;
@@ -44,8 +51,8 @@ namespace pipgrit
         _hud.bind(platform, &_renderer);
         _acc = 0.0f;
         _frameSeq = 0;
-
-        _selectorY = h - _renderer.bandRows(); 
+        _cachedCellCount = 0;
+        _selectorBarDirty = true;
 
         for (uint8_t i = 0; i < 2; ++i)
         {
@@ -61,8 +68,7 @@ namespace pipgrit
             this,
             5,
             &_simTaskHandle,
-            0
-        );
+            0);
 
         if (created != pdPASS)
         {
@@ -89,12 +95,18 @@ namespace pipgrit
     void Engine::simTask(void *param) noexcept
     {
         Engine *self = static_cast<Engine *>(param);
+        uint32_t stepCounter = 0;
+
         while (true)
         {
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
             (void)self->_sim.step();
             xTaskNotifyGive(self->_renderTaskHandle);
-            vTaskDelay(1);
+
+            if (++stepCounter % 30 == 0)
+            {
+                vTaskDelay(1);
+            }
         }
     }
 
@@ -173,6 +185,7 @@ namespace pipgrit
                 {
                     _hud.selectCategory(static_cast<uint8_t>(c));
                     selectMaterial(_hud.currentMaterial());
+                    _selectorBarDirty = true;
                     break;
                 }
             }
@@ -196,10 +209,15 @@ namespace pipgrit
             if (_isDragging[slot])
             {
                 const int16_t targetScroll = _scrollStartOffset - dx;
+                const int16_t oldScroll = _hud.scrollX();
                 _hud.setScrollX(std::clamp<int16_t>(targetScroll, 0, _hud.maxScrollX()));
+                if (_hud.scrollX() != oldScroll)
+                {
+                    _selectorBarDirty = true;
+                }
             }
         }
-        
+
         if (released)
         {
             if (!_isDragging[slot])
@@ -215,6 +233,7 @@ namespace pipgrit
                         {
                             _hud.setSelectedActiveIdx(static_cast<uint8_t>(i));
                             selectMaterial(_hud.currentMaterial());
+                            _selectorBarDirty = true;
                             break;
                         }
                     }
@@ -232,7 +251,7 @@ namespace pipgrit
             return;
         touch->update();
         const uint8_t n = touch->count();
-        
+
         bool activeThisFrame[2] = {false, false};
 
         for (uint8_t i = 0; i < n; ++i)
@@ -319,9 +338,16 @@ namespace pipgrit
             }
         }
 
-        _renderer.present(&_hud, _grid.countNonEmpty(),
+        if (_frameSeq % 30 == 0)
+        {
+            _cachedCellCount = _grid.countNonEmpty();
+        }
+
+        _renderer.present(&_hud, _cachedCellCount,
                           (PIPCORE_ENABLE_TOUCH && _platform->touch()) ? _platform->touch()->count() : 0,
-                          activeTouchX, activeTouchY);
+                          activeTouchX, activeTouchY, _selectorBarDirty);
+
+        _selectorBarDirty = false;
 
         _hud.endFrame();
         ++_frameSeq;

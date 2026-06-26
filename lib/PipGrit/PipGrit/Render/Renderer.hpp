@@ -31,11 +31,17 @@ namespace pipgrit
         [[nodiscard]] int16_t height() const noexcept { return _h; }
         [[nodiscard]] int16_t bandRows() const noexcept { return _bandRows; }
 
-        void present(Hud *hud = nullptr, uint32_t cellCount = 0, uint8_t touches = 0, int16_t touchX = -1, int16_t touchY = -1) noexcept;
+        [[nodiscard]] uint16_t *scratchBuffer(int index) noexcept { return _scratch[index & 1]; }
+
+        void forceFullRedraw() noexcept { _forceFullRedraw = true; }
+
+        void present(Hud *hud = nullptr, uint32_t cellCount = 0, uint8_t touches = 0, int16_t touchX = -1, int16_t touchY = -1, bool drawSelector = false) noexcept;
         void presentBand(int16_t bandIndex) noexcept;
 
     private:
-        uint32_t packBand(uint16_t *dst, int16_t y0, int16_t rows) const noexcept;
+        uint32_t packTile(uint16_t *dst, int16_t tx, int16_t ty, int16_t tileW, int16_t tileH) const noexcept;
+
+        bool isTileDirty(int16_t tx, int16_t ty, const uint8_t *chunks, int16_t chunkW, int16_t chunkH) const noexcept;
 
         pipcore::Platform *_platform = nullptr;
         pipcore::Display *_display = nullptr;
@@ -48,5 +54,6 @@ namespace pipgrit
         int16_t _bandStride = 0;
 
         uint32_t _frameCount = 0;
+        bool _forceFullRedraw = true;
     };
 }

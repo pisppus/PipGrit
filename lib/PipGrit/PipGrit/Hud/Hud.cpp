@@ -96,7 +96,8 @@ namespace pipgrit
 
     void Hud::selectCategory(uint8_t catIdx) noexcept
     {
-        if (catIdx >= 4) return;
+        if (catIdx >= 4)
+            return;
         _selectedCategory = catIdx;
 
         int16_t startX = 16;
@@ -108,7 +109,7 @@ namespace pipgrit
             {
                 _activeItemIndices[_activeItemCount] = static_cast<uint8_t>(i);
                 _activeItemX[_activeItemCount] = startX;
-                _activeItemW[_activeItemCount] = BitmapFont::textWidth(kSelectorItems[i].name) + 24; 
+                _activeItemW[_activeItemCount] = BitmapFont::textWidth(kSelectorItems[i].name) + 24;
                 startX += _activeItemW[_activeItemCount] + 10;
                 _activeItemCount++;
             }
@@ -116,7 +117,7 @@ namespace pipgrit
         _totalWidth = startX + 8;
         _maxScrollX = std::max<int16_t>(0, _totalWidth - (_platform && _platform->display() ? _platform->display()->width() : 480));
         _scrollX = 0;
-        
+
         if (_activeItemCount > 0)
         {
             _selectedActiveIdx = 0;
@@ -124,133 +125,80 @@ namespace pipgrit
         }
     }
 
-    void Hud::composite(uint16_t *bandBuf, int16_t bandY0, int16_t bandRows, int16_t stride, uint32_t cellCount, uint8_t touches, int16_t touchX, int16_t touchY) noexcept
+    void Hud::composite(uint16_t *tileBuf, int16_t tileX, int16_t tileY0, int16_t tileRows, int16_t stride, uint32_t cellCount, uint8_t touches, int16_t touchX, int16_t touchY) noexcept
     {
-        if (!_enabled || !bandBuf || !_platform)
+        if (!_enabled || !tileBuf || !_platform)
             return;
 
-        constexpr int16_t screenMarginX = 5;
         constexpr int16_t screenMarginY = 7;
-        
-        char line[48];
-        const int len = std::snprintf(line, sizeof(line),
-                                      "%4.0ffps %2ums  c:%lu  t:%u",
-                                      _perf.avgFps() > 0 ? _perf.avgFps() : _perf.fps(),
-                                      _perf.frameTimeMs(),
-                                      static_cast<unsigned long>(cellCount),
-                                      static_cast<unsigned>(touches));
-        if (len <= 0)
-            return;
-
-        const int16_t textW = BitmapFont::textWidth(line);
-        const int16_t boxH = BitmapFont::GlyphH + 2;
-        const int16_t boxW = textW + 6;
-
         const int16_t hudY0 = screenMarginY;
-        const int16_t hudY1 = screenMarginY + boxH;
 
-        const int16_t intersectY0 = std::max(bandY0, hudY0);
-        const int16_t intersectY1 = std::min<int16_t>(static_cast<int16_t>(bandY0 + bandRows), hudY1);
-
-        const uint16_t bg = kColorLut[Empty];
-
-        if (intersectY0 < intersectY1)
+        if (tileX <= 160)
         {
-            constexpr size_t kScratchW = 220;
-            constexpr size_t kScratchH = 12;
-            if (static_cast<size_t>(boxW) > kScratchW || static_cast<size_t>(boxH) > kScratchH)
-                return;
-
-            static uint16_t box[kScratchW * kScratchH];
-            const size_t totalPixels = static_cast<size_t>(boxW) * boxH;
-            for (size_t i = 0; i < totalPixels; ++i)
-                box[i] = bg;
-
-            BitmapFont::drawString(box, boxW, boxH, 4, 2, line, kColorShadow, 0, false);
-            BitmapFont::drawString(box, boxW, boxH, 3, 1, line, kColorText, 0, false);
-
-            for (int16_t y = intersectY0; y < intersectY1; ++y)
+            char line[32];
+            const int len = std::snprintf(line, sizeof(line),
+                                          "%3.0ffps %2ums c:%lu",
+                                          _perf.avgFps() > 0 ? _perf.avgFps() : _perf.fps(),
+                                          _perf.frameTimeMs(),
+                                          static_cast<unsigned long>(cellCount));
+            if (len > 0)
             {
-                const int16_t boxRow = y - hudY0;
-                const int16_t bandRow = y - bandY0;
+                const int16_t localY = hudY0 - tileY0;
+                const int16_t localX = 5 - tileX;
 
-                uint16_t *dst = bandBuf + static_cast<size_t>(bandRow) * stride + screenMarginX;
-                const uint16_t *src = box + static_cast<size_t>(boxRow) * boxW;
-
-                std::memcpy(dst, src, static_cast<size_t>(boxW) * sizeof(uint16_t));
+                BitmapFont::drawString(tileBuf, stride, tileRows, localX + 1, localY + 1, line, kColorShadow, 0, false);
+                BitmapFont::drawString(tileBuf, stride, tileRows, localX, localY, line, kColorText, 0, false);
             }
         }
-
-        if (touchX >= 0 && touchY >= 0 && _renderer && _renderer->grid())
+        else if (tileX == 400)
         {
-            const Grid *grid = _renderer->grid();
-            if (grid->inBounds(touchX, touchY))
+            if (touchX >= 0 && touchY >= 0 && _renderer && _renderer->grid())
             {
-                uint8_t t_val = grid->temp(touchX, touchY);
-                uint8_t p_val = grid->localPressure(touchX, touchY);
-
-                char r_line[32];
-                const int r_len = std::snprintf(r_line, sizeof(r_line), "T:%uC P:%u%%", t_val, p_val);
-                if (r_len > 0)
+                const Grid *grid = _renderer->grid();
+                if (grid->inBounds(touchX, touchY))
                 {
-                    const int16_t r_textW = BitmapFont::textWidth(r_line);
-                    const int16_t r_boxW = r_textW + 6;
-                    const int16_t r_boxX0 = stride - r_boxW - screenMarginX;
+                    uint8_t t_val = grid->temp(touchX, touchY);
+                    uint8_t p_val = grid->localPressure(touchX, touchY);
 
-                    if (intersectY0 < intersectY1)
+                    char r_line[32];
+                    const int r_len = std::snprintf(r_line, sizeof(r_line), "T:%uC P:%u%%", t_val, p_val);
+                    if (r_len > 0)
                     {
-                        constexpr size_t kRScratchW = 120;
-                        constexpr size_t kScratchH = 12;
-                        if (static_cast<size_t>(r_boxW) > kRScratchW || static_cast<size_t>(boxH) > kScratchH)
-                            return;
+                        const int16_t r_textW = BitmapFont::textWidth(r_line);
+                        const int16_t localX = stride - r_textW - 5;
+                        const int16_t localY = hudY0 - tileY0;
 
-                        static uint16_t r_box[kRScratchW * kScratchH];
-                        const size_t r_totalPixels = static_cast<size_t>(r_boxW) * boxH;
-                        for (size_t i = 0; i < r_totalPixels; ++i)
-                            r_box[i] = bg;
-
-                        BitmapFont::drawString(r_box, r_boxW, boxH, 4, 2, r_line, kColorShadow, 0, false);
-                        BitmapFont::drawString(r_box, r_boxW, boxH, 3, 1, r_line, kColorText, 0, false);
-
-                        for (int16_t y = intersectY0; y < intersectY1; ++y)
-                        {
-                            const int16_t boxRow = y - hudY0;
-                            const int16_t bandRow = y - bandY0;
-
-                            uint16_t *dst = bandBuf + static_cast<size_t>(bandRow) * stride + r_boxX0;
-                            const uint16_t *src = r_box + static_cast<size_t>(boxRow) * r_boxW;
-
-                            std::memcpy(dst, src, static_cast<size_t>(r_boxW) * sizeof(uint16_t));
-                        }
+                        BitmapFont::drawString(tileBuf, stride, tileRows, localX + 1, localY + 1, r_line, kColorShadow, 0, false);
+                        BitmapFont::drawString(tileBuf, stride, tileRows, localX, localY, r_line, kColorText, 0, false);
                     }
                 }
             }
         }
     }
 
-    void Hud::drawSelectorBar(uint16_t *dst, int16_t screenW, int16_t rows) noexcept
+    void Hud::drawSelectorBarTile(uint16_t *dst, int16_t tileX, int16_t tileW, int16_t rows) noexcept
     {
-        if (!dst || screenW <= 0 || rows <= 0)
+        if (!dst || tileW <= 0 || rows <= 0)
             return;
 
-        const size_t totalPixels = static_cast<size_t>(screenW) * rows;
+        const size_t totalPixels = static_cast<size_t>(tileW) * rows;
         for (size_t i = 0; i < totalPixels; ++i)
             dst[i] = bgSwapped;
 
         const int16_t catY = 4;
         for (size_t c = 0; c < 4; ++c)
         {
-            const int16_t cx = _catX[c];
-            
+            const int16_t cx = _catX[c] - tileX;
+
             if (c == _selectedCategory)
             {
                 char tabStr[32];
                 std::snprintf(tabStr, sizeof(tabStr), "[%s]", kCategories[c].name);
-                BitmapFont::drawString(dst, screenW, rows, cx, catY, tabStr, kCategories[c].color, 0, false);
+                BitmapFont::drawString(dst, tileW, rows, cx, catY, tabStr, kCategories[c].color, 0, false);
             }
             else
             {
-                BitmapFont::drawString(dst, screenW, rows, static_cast<int16_t>(cx + 6), catY, kCategories[c].name, kColorText, 0, false);
+                BitmapFont::drawString(dst, tileW, rows, static_cast<int16_t>(cx + 6), catY, kCategories[c].name, kColorText, 0, false);
             }
         }
 
@@ -260,10 +208,10 @@ namespace pipgrit
 
         for (size_t i = 0; i < _activeItemCount; ++i)
         {
-            const int16_t rx = _activeItemX[i] - _scrollX;
+            const int16_t rx = _activeItemX[i] - _scrollX - tileX;
             const int16_t rw = _activeItemW[i];
 
-            if (rx + rw < 0 || rx >= screenW)
+            if (rx + rw < 0 || rx >= tileW)
                 continue;
 
             const SelectorItem &item = kSelectorItems[_activeItemIndices[i]];
@@ -272,37 +220,43 @@ namespace pipgrit
 
             if (i == _selectedActiveIdx)
             {
-                drawRoundedRectAA(dst, screenW, rows, rx, ry, rw, barH, radius, selectBorderSwapped, bgSwapped);
+                drawRoundedRectAA(dst, tileW, rows, rx, ry, rw, barH, radius, selectBorderSwapped, bgSwapped);
                 int16_t innerRadius = std::max<int16_t>(1, radius - 2);
-                drawRoundedRectAA(dst, screenW, rows, static_cast<int16_t>(rx + 2), static_cast<int16_t>(ry + 2), static_cast<int16_t>(rw - 4), static_cast<int16_t>(barH - 4), innerRadius, itemColorSwapped, selectBorderSwapped);
+                drawRoundedRectAA(dst, tileW, rows, static_cast<int16_t>(rx + 2), static_cast<int16_t>(ry + 2), static_cast<int16_t>(rw - 4), static_cast<int16_t>(barH - 4), innerRadius, itemColorSwapped, selectBorderSwapped);
             }
             else
             {
-                drawRoundedRectAA(dst, screenW, rows, rx, ry, rw, barH, radius, itemColorSwapped, bgSwapped);
+                drawRoundedRectAA(dst, tileW, rows, rx, ry, rw, barH, radius, itemColorSwapped, bgSwapped);
             }
 
             const int16_t textW = BitmapFont::textWidth(item.name);
             const int16_t tx = rx + (rw - textW) / 2;
             const int16_t ty = ry + (barH - BitmapFont::GlyphH) / 2;
 
-            BitmapFont::drawString(dst, screenW, rows, static_cast<int16_t>(tx + 1), static_cast<int16_t>(ty + 1), item.name, kColorShadow, 0, false);
-            BitmapFont::drawString(dst, screenW, rows, tx, ty, item.name, textColorSwapped, 0, false);
+            BitmapFont::drawString(dst, tileW, rows, static_cast<int16_t>(tx + 1), static_cast<int16_t>(ty + 1), item.name, kColorShadow, 0, false);
+            BitmapFont::drawString(dst, tileW, rows, tx, ty, item.name, textColorSwapped, 0, false);
         }
 
         for (int16_t y = 0; y < rows; ++y)
         {
-            uint16_t *row = dst + static_cast<size_t>(y) * screenW;
-            
-            for (int16_t x = 0; x < 32; ++x)
+            uint16_t *row = dst + static_cast<size_t>(y) * tileW;
+
+            if (tileX == 0)
             {
-                uint8_t alpha = static_cast<uint8_t>((x * 255) / 32);
-                row[x] = blendSwapped565(bgSwapped, row[x], alpha);
+                for (int16_t x = 0; x < 32; ++x)
+                {
+                    uint8_t alpha = static_cast<uint8_t>((x * 255) / 32);
+                    row[x] = blendSwapped565(bgSwapped, row[x], alpha);
+                }
             }
-            
-            for (int16_t x = screenW - 32; x < screenW; ++x)
+
+            if (tileX == 320)
             {
-                uint8_t alpha = static_cast<uint8_t>(((screenW - 1 - x) * 255) / 32);
-                row[x] = blendSwapped565(bgSwapped, row[x], alpha);
+                for (int16_t x = tileW - 32; x < tileW; ++x)
+                {
+                    uint8_t alpha = static_cast<uint8_t>(((tileW - 1 - x) * 255) / 32);
+                    row[x] = blendSwapped565(bgSwapped, row[x], alpha);
+                }
             }
         }
     }

@@ -35,6 +35,8 @@ namespace pipgrit
         [[nodiscard]] uint32_t stepLava(uint8_t *cells, int16_t w, int16_t h, int16_t x, int16_t y) noexcept;
         [[nodiscard]] uint32_t stepGunpowder(uint8_t *cells, int16_t w, int16_t h, int16_t x, int16_t y) noexcept;
 
+        [[nodiscard]] uint32_t stepSmoke(uint8_t *cells, int16_t w, int16_t h, int16_t x, int16_t y) noexcept;
+
         Grid *_grid = nullptr;
         uint32_t _rng = 0x12345678u;
         uint32_t _stepCount = 0;

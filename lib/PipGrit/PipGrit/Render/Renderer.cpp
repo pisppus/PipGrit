@@ -21,9 +21,12 @@ namespace pipgrit
         _bandRows = std::max<int16_t>(1, height / numTiles);
         _w = width;
         _h = height;
-        _bandStride = static_cast<int16_t>(width) * _bandRows;
 
-        const size_t bytes = static_cast<size_t>(_bandStride) * sizeof(uint16_t);
+        const int16_t tileW = 160;
+        const int16_t tileH = _bandRows;
+        const size_t tilePixels = static_cast<size_t>(tileW) * tileH;
+
+        const size_t bytes = tilePixels * sizeof(uint16_t);
         for (int i = 0; i < 2; ++i)
         {
             _scratch[i] = static_cast<uint16_t *>(
@@ -36,6 +39,7 @@ namespace pipgrit
         }
         _platform = platform;
         _frameCount = 0;
+        _forceFullRedraw = true;
         return true;
     }
 
@@ -58,24 +62,27 @@ namespace pipgrit
         _w = _h = _bandStride = _bandRows = 0;
     }
 
-    uint32_t Renderer::packBand(uint16_t *dst, int16_t y0, int16_t rows) const noexcept
+    uint32_t Renderer::packTile(uint16_t *dst, int16_t tx, int16_t ty, int16_t tileW, int16_t tileH) const noexcept
     {
         if (!_grid || !dst)
             return 0;
 
-        const int16_t w = _w;
+        const int16_t w = _grid->width();
         const uint8_t *cells = _grid->cells();
         const uint8_t *temps = _grid->temps();
         uint16_t *out = dst;
 
         const int16_t wt = w >> 2;
 
-        for (int16_t y = y0; y < y0 + rows; ++y)
+        const int16_t x0 = tx * tileW;
+        const int16_t y0 = ty * tileH;
+
+        for (int16_t y = y0; y < y0 + tileH; ++y)
         {
             const uint8_t *row = cells + static_cast<size_t>(y) * w;
             const uint8_t *temp_row = temps + (static_cast<size_t>(y >> 2) * wt);
 
-            for (int16_t x = 0; x < w; ++x)
+            for (int16_t x = x0; x < x0 + tileW; ++x)
             {
                 const uint8_t raw = row[x];
                 const uint8_t cellType = raw & 0x7F;
@@ -163,63 +170,127 @@ namespace pipgrit
         return static_cast<uint32_t>(out - dst);
     }
 
-    void Renderer::presentBand(int16_t bandIndex) noexcept
+    bool Renderer::isTileDirty(int16_t tx, int16_t ty, const uint8_t *chunks, int16_t chunkW, int16_t chunkH) const noexcept
     {
-        if (!_display || !_grid || _bandStride <= 0)
-            return;
+        if (_forceFullRedraw)
+            return true;
 
-        const int16_t y0 = bandIndex * _bandRows;
-        if (y0 >= _h)
-            return;
-        const int16_t rows = std::min<int16_t>(_bandRows, static_cast<int16_t>(_h - y0));
+        if (ty == 0)
+            return true;
 
-        uint16_t *dst = _scratch[bandIndex & 1];
-        packBand(dst, y0, rows);
-        _display->writeRect565(0, y0, _w, rows, dst, _w);
+        if (!chunks)
+            return true;
+
+        const int16_t startCx = tx * 20;
+        const int16_t endCx = std::min<int16_t>((tx + 1) * 20, chunkW);
+        const int16_t startCy = ty * 5;
+        const int16_t endCy = std::min<int16_t>((ty + 1) * 5, chunkH);
+
+        for (int16_t cy = startCy; cy < endCy; ++cy)
+        {
+            const uint8_t *chunkRow = chunks + static_cast<size_t>(cy) * chunkW;
+            for (int16_t cx = startCx; cx < endCx; ++cx)
+            {
+                if (chunkRow[cx] != 0)
+                    return true;
+            }
+        }
+        return false;
     }
 
-    void Renderer::present(Hud *hud, uint32_t cellCount, uint8_t touches, int16_t touchX, int16_t touchY) noexcept
+    void Renderer::presentBand(int16_t bandIndex) noexcept
+    {
+        (void)bandIndex;
+    }
+
+    void Renderer::present(Hud *hud, uint32_t cellCount, uint8_t touches, int16_t touchX, int16_t touchY, bool drawSelector) noexcept
     {
         _frameCount++;
 
-        if (!_display || !_grid || _bandStride <= 0 || _w <= 0 || _h <= 0)
+        if (!_display || !_grid || _w <= 0 || _h <= 0)
             return;
 
-        const int16_t bandCount = (_h + _bandRows - 1) / _bandRows;
+        const int16_t tileW = 80;
+        const int16_t tileH = _bandRows;
+        const int16_t numCols = _w / tileW;
+        const int16_t numRows = (_h + tileH - 1) / tileH;
+
+        uint64_t dirtyMask = _grid->tileDirtyMaskCurrent();
+        if (_forceFullRedraw)
+        {
+            dirtyMask = 0xFFFFFFFFFFFFFFFFULL;
+        }
+
         bool inflight = false;
         int inflightSlot = 0;
+        int currentSlot = 0;
 
-        for (int16_t b = 0; b < bandCount; ++b)
+        const int16_t simRows = numRows - 1;
+
+        for (int16_t ty = 0; ty < simRows; ++ty)
         {
-            const int16_t y0 = b * _bandRows;
-            const int16_t rows = std::min<int16_t>(_bandRows, static_cast<int16_t>(_h - y0));
-            const int slot = b & 1;
+            for (int16_t tx = 0; tx < numCols; ++tx)
+            {
+                const int16_t tileIdx = ty * numCols + tx;
 
-            if (inflight && inflightSlot == slot)
-            {
-                _display->waitDMA();
-                inflight = false;
-            }
+                bool isDirty = (dirtyMask & (1ULL << tileIdx)) != 0;
 
-            if (b == bandCount - 1 && hud)
-            {
-                hud->drawSelectorBar(_scratch[slot], _w, rows);
-            }
-            else
-            {
-                packBand(_scratch[slot], y0, rows);
-                if (b == 0 && hud)
+                if (ty == 0)
                 {
-                    hud->composite(_scratch[slot], y0, rows, _w, cellCount, touches, touchX, touchY);
+                    isDirty = true;
                 }
-            }
 
-            _display->writeRect565Async(0, y0, _w, rows, _scratch[slot], _w);
-            inflight = true;
-            inflightSlot = slot;
+                if (!isDirty)
+                    continue;
+
+                const int slot = currentSlot;
+
+                if (inflight && inflightSlot == slot)
+                {
+                    _display->waitDMA();
+                    inflight = false;
+                }
+
+                packTile(_scratch[slot], tx, ty, tileW, tileH);
+
+                if (ty == 0 && hud)
+                {
+                    hud->composite(_scratch[slot], tx * tileW, 0, tileH, tileW, cellCount, touches, touchX, touchY);
+                }
+
+                _display->writeRect565Async(tx * tileW, ty * tileH, tileW, tileH, _scratch[slot], tileW);
+                inflight = true;
+                inflightSlot = slot;
+                currentSlot ^= 1;
+            }
+        }
+
+        if (drawSelector && hud)
+        {
+            const int16_t ty = numRows - 1;
+
+            for (int16_t tx = 0; tx < numCols; ++tx)
+            {
+                const int slot = currentSlot;
+
+                if (inflight && inflightSlot == slot)
+                {
+                    _display->waitDMA();
+                    inflight = false;
+                }
+
+                hud->drawSelectorBarTile(_scratch[slot], tx * tileW, tileW, tileH);
+
+                _display->writeRect565Async(tx * tileW, ty * tileH, tileW, tileH, _scratch[slot], tileW);
+                inflight = true;
+                inflightSlot = slot;
+                currentSlot ^= 1;
+            }
         }
 
         if (inflight)
             _display->waitDMA();
+
+        _forceFullRedraw = false;
     }
 }
