@@ -1,13 +1,13 @@
 #pragma once
 
-#include <PipCore/Config/Features.hpp>
+#include <PipCore/Features.hpp>
+#include <cstddef>
 
 #if !PIPCORE_TARGET_ESP32
 #error "pipcore::esp32::services::Touch requires ESP32"
 #endif
 
 #include <PipCore/Input/Touch.hpp>
-#include <PipCore/Platforms/ESP32/Peripherals/Ft6336u.hpp>
 
 namespace pipcore::esp32::services
 {
@@ -17,14 +17,7 @@ namespace pipcore::esp32::services
         Touch() = default;
         ~Touch() override;
 
-        [[nodiscard]] bool configure(int8_t sda,
-                                     int8_t scl,
-                                     int8_t intr,
-                                     uint8_t i2cAddr,
-                                     uint32_t freqHz,
-                                     uint16_t width,
-                                     uint16_t height,
-                                     uint8_t rotation) noexcept override;
+        [[nodiscard]] bool configure(const pipcore::TouchConfig &cfg) noexcept override;
 
         [[nodiscard]] bool begin() noexcept override;
         void end() noexcept override;
@@ -51,15 +44,26 @@ namespace pipcore::esp32::services
         Slot *findSlotById(uint8_t id) noexcept;
         Slot *findFreeSlot() noexcept;
 
-        Ft6336u _dev;
+        [[nodiscard]] bool i2cWriteReg(uint8_t reg, uint8_t value) noexcept;
+        [[nodiscard]] bool i2cReadReg(uint8_t reg, uint8_t &out) noexcept;
+        [[nodiscard]] bool i2cReadRegs(uint8_t reg, uint8_t *buf, size_t len) noexcept;
+
         Slot _slots[MaxPoints] = {};
 
         uint16_t _width = 0;
         uint16_t _height = 0;
         uint8_t _rotation = 0;
+
+        int8_t _sda = -1;
+        int8_t _scl = -1;
         int8_t _intr = -1;
+        uint8_t _i2cAddr = 0x38;
+        uint32_t _freqHz = 400000;
+        int _i2cPort = 0;
+
         bool _ready = false;
         bool _isrAttached = false;
+        bool _i2cBusOwned = false;
         uint8_t _reported = 0;
 
         volatile bool _touchedFlag = false;

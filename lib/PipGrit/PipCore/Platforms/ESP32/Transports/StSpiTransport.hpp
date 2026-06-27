@@ -1,29 +1,28 @@
 #pragma once
 
-#include <PipCore/Config/Features.hpp>
+#include <PipCore/Features.hpp>
 
 #if !defined(ESP32)
-#error "pipcore::esp32::SpiLcdTransport requires ESP32"
+#error "pipcore::esp32::StSpiTransport requires ESP32"
 #endif
 
-#include <PipCore/Displays/ST7789/Driver.hpp>
-
+#include <PipCore/Displays/StDriver.hpp>
 #include <driver/spi_master.h>
 
 namespace pipcore::esp32
 {
-    class SpiLcdTransport final : public st7789::Transport
+    class StSpiTransport final : public st::Transport
     {
     public:
-        SpiLcdTransport() = default;
-        ~SpiLcdTransport();
+        StSpiTransport() = default;
+        ~StSpiTransport();
 
         void configure(int8_t mosi, int8_t sclk, int8_t cs, int8_t dc, int8_t rst, uint32_t hz = 80000000) noexcept;
 
         [[nodiscard]] bool init() override;
         void deinit() override;
-        [[nodiscard]] st7789::IoError lastError() const noexcept override { return _lastError; }
-        void clearError() noexcept override { _lastError = st7789::IoError::None; }
+        [[nodiscard]] st::IoError lastError() const noexcept override { return _lastError; }
+        void clearError() noexcept override { _lastError = st::IoError::None; }
         [[nodiscard]] bool setRst(bool level) override;
         void delayMs(uint32_t ms) override;
         [[nodiscard]] bool write(const void *data, size_t len) override;
@@ -50,7 +49,7 @@ namespace pipcore::esp32
     private:
         [[nodiscard]] bool initSpi();
         [[nodiscard]] bool drainQueue();
-        [[nodiscard]] bool fail(st7789::IoError error);
+        [[nodiscard]] bool fail(st::IoError error);
         [[nodiscard]] bool writePixelsImpl(const void *data, size_t len, bool useDmaBufferIfNonCapable);
 
         int8_t _pinMosi = -1;
@@ -64,7 +63,7 @@ namespace pipcore::esp32
         uint8_t *_dmaBuf[2] = {nullptr, nullptr};
         bool _busAcquired = false;
         bool _initialized = false;
-        st7789::IoError _lastError = st7789::IoError::None;
+        st::IoError _lastError = st::IoError::None;
 
         static constexpr size_t HardwareMaxDmaBytes = 32768U;
         static constexpr size_t DmaBufferBytes = 16384U;
@@ -81,6 +80,4 @@ namespace pipcore::esp32
         uint16_t _lastYs = 0xFFFF;
         uint16_t _lastYe = 0xFFFF;
     };
-
-    using St7789Spi = SpiLcdTransport;
 }

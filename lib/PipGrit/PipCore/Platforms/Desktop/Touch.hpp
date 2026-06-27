@@ -1,6 +1,6 @@
 #pragma once
 
-#include <PipCore/Config/Features.hpp>
+#include <PipCore/Features.hpp>
 
 #if PIPCORE_TARGET_DESKTOP
 
@@ -11,11 +11,12 @@ namespace pipcore::desktop
     class Touch final : public pipcore::Touch
     {
     public:
-        [[nodiscard]] bool configure(int8_t, int8_t, int8_t, uint8_t, uint32_t,
-                                     uint16_t width, uint16_t height, uint8_t) noexcept override
+        [[nodiscard]] bool configure(const pipcore::TouchConfig &cfg) noexcept override
         {
-            _width = width;
-            _height = height;
+            _width = cfg.width;
+            _height = cfg.height;
+            _activePoint = {};
+            _lastDown = false;
             return true;
         }
 

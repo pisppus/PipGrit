@@ -1,6 +1,6 @@
 #pragma once
 
-#include <PipCore/Config/Features.hpp>
+#include <PipCore/Features.hpp>
 #include <PipCore/Display.hpp>
 #include <PipCore/Platform.hpp>
 #include <PipCore/Platforms/Select.hpp>

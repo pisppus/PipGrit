@@ -1,6 +1,6 @@
 #pragma once
 
-#include <PipCore/Config/Features.hpp>
+#include <PipCore/Features.hpp>
 
 #ifndef PIPCORE_DISPLAY
 #error "Display not selected. Define PIPCORE_DISPLAY in config.hpp"

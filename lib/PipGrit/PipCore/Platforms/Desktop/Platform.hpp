@@ -1,6 +1,6 @@
 #pragma once
 
-#include <PipCore/Config/Features.hpp>
+#include <PipCore/Features.hpp>
 
 #if PIPCORE_TARGET_DESKTOP
 
